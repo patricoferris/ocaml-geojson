@@ -1,0 +1,5 @@
+(library
+ (name geojson_ezjsonm)
+ (public_name geojson.ezjsonm)
+ (optional)
+ (libraries geojson ezjsonm))

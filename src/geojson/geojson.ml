@@ -473,6 +473,22 @@ module Make (J : Intf.Json) = struct
   and t = { geojson : geojson; bbox : float array option }
 
   let geojson t = t.geojson
+
+  let geometry t =
+    match t.geojson with
+    | Geometry g -> g
+    | _ -> invalid_arg "Expected a Geometry in the GeoJSON object"
+
+  let feature t =
+    match t.geojson with
+    | Feature g -> g
+    | _ -> invalid_arg "Expected a Feature in the GeoJSON object"
+
+  let feature_collection t =
+    match t.geojson with
+    | FeatureCollection g -> g
+    | _ -> invalid_arg "Expected a Feature Collection in the GeoJSON object"
+
   let bbox t = t.bbox
   let v ?bbox geojson = { geojson; bbox }
   let geojson_to_t gjson bbox = { geojson = gjson; bbox }
@@ -509,17 +525,23 @@ module Make (J : Intf.Json) = struct
           (`Msg
             "A Geojson text should contain one object with a member `type`.")
 
+  let of_json_exn json =
+    match of_json json with Ok v -> v | Error (`Msg m) -> invalid_arg m
+
   let to_json = function
     | { geojson = Feature f; bbox } -> Feature.to_json ?bbox f
     | { geojson = FeatureCollection fc; bbox } ->
         Feature.Collection.to_json ?bbox fc
     | { geojson = Geometry g; bbox } -> Geometry.to_json ?bbox g
 
+  module Json = J
+
   module Accessor = struct
     module Optics = Optics
     include Optics.Infix
 
     let get = Optics.Lens.get
+    let set = Optics.Lens.set
 
     let geojson =
       Optics.Lens.V

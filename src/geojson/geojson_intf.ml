@@ -270,7 +270,26 @@ module type S = sig
   (** The type for GeoJSON objects. *)
 
   val geojson : t -> geojson
-  (** [geojson t] will extract geojson value from t (a GeoJSON object) *)
+  (** [geojson t] will extract {! geojson} value from [t]. You may wish to use
+      {! feature}, {! geometry} or {! feature_collection} to extract these
+      directly. *)
+
+  val geometry : t -> Geometry.t
+  (** [geometry t] will try to extract a {! Geometry.t} from the GeoJSON object.
+      Note this will not read through a feature object.
+
+      @raise Invalid_argument if the GeoJSON object is not a geometry *)
+
+  val feature : t -> Feature.t
+  (** [feature t] will try to extract a {! Feature.t} from the GeoJSON object.
+
+      @raise Invalid_argument if the GeoJSON object is not a feature *)
+
+  val feature_collection : t -> Feature.Collection.t
+  (** [feature_collection t] will try to extract a {! Feature.Collection.t} from
+      the GeoJSON object.
+
+      @raise Invalid_argument if the GeoJSON object is not a feature collection *)
 
   val bbox : t -> float array option
   (** [bbox t] will extract bbox value from t (a GeoJSON object) *)
@@ -283,8 +302,15 @@ module type S = sig
   (** [of_json json] converts the JSON to a GeoJSON object (a type {!t}) or an
       error. *)
 
+  val of_json_exn : json -> t
+  (** [of_json_exn] is like {! of_json} except it raise [Invalid_argument _] if
+      we fail to construct a GeoJSON object. *)
+
   val to_json : t -> json
   (** [to_json g] converts the GeoJSON object [g] to JSON *)
+
+  module Json : Json with type t = json
+  (** A re-exported version of the Json library provided to Make. *)
 
   module Accessor : sig
     module Optics = Optics
@@ -297,6 +323,9 @@ module type S = sig
 
     val get : ('a, 'b) Optics.Lens.t -> 'a -> 'b
     (** [get lens v] focuses onto the field in [lens] for the value [v]. *)
+
+    val set : ('a, 'b) Optics.Lens.t -> 'a -> 'b -> 'a 
+    (** [set lens v b] sets the field ['b] in [v] to [b] *)
 
     val geojson : (t, geojson) Optics.Lens.t
     (** A lens for focusing on the [geojson] value. *)
