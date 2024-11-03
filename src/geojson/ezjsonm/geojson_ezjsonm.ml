@@ -1,6 +1,3 @@
-#require "geojson";;
-#require "ezjsonm";;
-#require "geojsone";;
 module Ezjsonm_parser = struct
   type t = Ezjsonm.value
 
@@ -24,16 +21,4 @@ module Ezjsonm_parser = struct
   let is_null = function `Null -> true | _ -> false
 end
 
-let feature_example = {|
-{
-  "type": "Feature",
-  "geometry": {
-      "type": "MultiPoint",
-      "coordinates": [[125.1, 40.0], [155.9, 22.5]]
-  },
-  "properties": {
-      "name": "Dinagat Islands"
-  },
-  "title": "Some Islands"
-}
-|}
+include Geojson.Make (Ezjsonm_parser)

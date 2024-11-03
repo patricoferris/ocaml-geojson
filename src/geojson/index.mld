@@ -1,84 +1,156 @@
 {1 GeoJson}
 
-The GeoJson library provides a functor {! Make} for building a GeoJson parsing
-and manipulating module. You just need to provide a Json parser using tools like
-[Ezjsone] or [Yojson].
+The [Geojson] library makes it easy to read and write JSON that conforms to the
+{{: https://www.rfc-editor.org/rfc/rfc7946} GeoJSON specification}.
 
-{i Before diving in, it is important to note that if you are dealing with gigabytes
-   of data in GeoJson format you would be better served by the [Geojsonm] library which
-   provides functions using the [Jsonm] streaming parser to avoid loading everything
-   in memory}.
+To see what any given implementation of [Geojson], please look at the shared interface {! Geojson.S}.
 
-{2 Providing a Json Parser}
+{2 Quickstart}
 
-Before getting a Geojson library you first must provide a parser implementation. {! Geojson} doesn't
-depend on a particular Json parsing library (there are quite a few in the OCaml universe). This modularity 
-comes with a small cost, you must provide a simple parsing module to the {! Geojson.Make} functor.
+To get up and running quickly, install [geojson] and [yojson] and add [geojson.yojson]
+to your library stanza in your dune file.
 
-{3 Ezjsone Parser}
-
-The following is an example of such a parser. If you can you would be better checking the tests and benchmarks
-{{: https://github.com/patricoferris/ocaml-geojson} of this library} for an up to date, type-checked and building version.
-
-{[
-module Ezjsone_parser = struct
-  type t = Ezjsone.value
-
-  let catch_err f v =
-    try Ok (f v) with Ezjsone.Parse_error (_, s) -> Error (`Msg s)
-
-  let find = Ezjsone.find_opt
-  let to_string t = catch_err Ezjsone.get_string t
-  let string = Ezjsone.string
-  let to_float t = catch_err Ezjsone.get_float t
-  let float = Ezjsone.float
-  let to_list f t = catch_err (Ezjsone.get_list f) t
-  let list f t = Ezjsone.list f t
-  let to_array f t = Result.map Array.of_list @@ to_list f t
-  let array f t = list f (Array.to_list t)
-  let obj = Ezjsone.dict
-  let null = `Null
-  let is_null = function `Null -> true | _ -> false
-end
+{@ocaml[
+module G = Geojson_yojson    
 ]}
 
-Feel free to copy and paste any of the parsers without attribution :) 
+{3 Reading Values}
 
-{2 Using the Library}
+Here is an example of simple {{: https://www.rfc-editor.org/rfc/rfc7946#section-3.2} Feature}
+object.
 
-{3 Reading Geojson}
-
-Once you have provided the Json parser, you can then start using the library properly.
-The simplest way to get started is first reading Json into your choosen parsers internal
-representation and calling {! Geojson.S.of_json}.
-
-Sticking with the [Ezjsone] example we can do
-
-{[
-module G = Geojson.Make(Ezjsone_parser)
-
-let geojson_of_string s = 
-  let json = Ezjsone.value_from_string s in
-    match G.of_json json with 
-      | Ok v -> v
-      | Error (`Msg m) -> failwith m
+{@ocaml[
+let feature_example = {|
+    {
+      "type": "Feature",
+      "geometry": {
+          "type": "MultiPoint",
+          "coordinates": [[125.1, 40.0], [155.9, 22.5]]
+      },
+      "properties": {
+          "name": "Dinagat Islands"
+      },
+      "title": "Some Islands"
+    }
+|}
 ]}
 
-{3 Manipulating and Accessing Geojson}
+It contains a single {! Geojson.S.Geometry}. We can parse this raw JSON string into a {! Geojson.S.t}
+value.
 
-Imagine you wished to access all the [properties] fields in your GeoJson document. There are two 
-ways they can appear -- either as part of a single, toplevel {! Geojson.S.Feature} object or as 
-a list of features inside {! Geojson.S.Feature.Collection}. Here's one way you could go about this:
-
-{[
-let get_all_props s = 
-  let json = Ezjsone.value_from_string s in
-  let geo = G.of_json json in
-  match geo with 
-    | Ok (Feature f) -> Option.to_list @@ G.Feature.properties f 
-    | Ok (FeatureCollection fc) -> 
-      let fs = G.Feature.Collection.features fc in
-      List.filter_map G.Feature.properties fs 
-    | _ -> []
+{@ocaml[
+# let islands = G.of_json_exn (Yojson.Safe.from_string feature_example);;
+val islands : G.t = <abstr>
 ]}
 
+This value represents a GeoJSON object which may be a {! Geojson.S.Geometry}, {! Geojson.S.Feature}
+or {! Geojson.S.Feature.Collection}. We know, in this case, that it is a feature. We can use the accessor
+for that which would raise an error if that was not the case.
+
+{@ocaml[
+# let islands_feature = G.feature islands;;
+val islands_feature : G.Feature.t = <abstr>
+]}
+
+{4 Geometries}
+
+Accessing the underlying geometry is just a matter of unwrapping our way down to the geometry. The {! Geojson}
+library airs on the side of caution which does mean having to insert {! Option.get} or {! Option.map}
+in a few places, or asserting certain cases are not possible.
+
+{@ocaml[
+# let island_points = 
+  G.Feature.geometry islands_feature
+  |> Option.map G.Geometry.geometry
+  |> Option.map @@ function
+  | G.Geometry.MultiPoint m -> m
+  | _ -> failwith "Expected a Multipoint geometry";;
+val island_points : G.Geometry.MultiPoint.t option = Some <abstr>
+]}
+
+
+{@ocaml[
+# let island_points = 
+  G.Feature.geometry islands_feature
+  |> Option.map G.Geometry.geometry
+  |> Option.map @@ function
+  | G.Geometry.MultiPoint m -> m
+  | _ -> failwith "Expected a Multipoint geometry";;
+val island_points : G.Geometry.MultiPoint.t option = Some <abstr>
+]}
+
+Most raw data for a geometry ends up being stored as a {! float array} (or some nested version of that). 
+The points in this case are an array of {! Geojson.S.Geometry.Position}s.
+
+{@ocaml[
+# let raw_points = 
+  Option.get island_points 
+  |> G.Geometry.MultiPoint.coordinates;;
+val raw_points : Geojson_yojson.Geometry.Position.t array =
+  [|[|125.1; 40.|]; [|155.9; 22.5|]|]
+]}
+
+For the adventurous OCaml developer, you can try out the {! Geojson.S.Accessor} library for
+getting and setting values deep inside nested values like this. There is a small section
+...
+
+{4 Properties and Foreign Members}
+
+Most GeoJSON objects also have well-defined metadata attached to them (in ["properties"] fields)
+alongside custom, domain-specific information (foreign members). The library provides ways to
+extract the values directly.
+
+{@ocaml[
+# let props =
+  G.Feature.properties islands_feature
+  |> fun v -> Option.bind v ((Fun.flip G.Json.find) [ "name" ])
+  |> Option.map G.Json.to_string;;
+val props : (string, [ `Msg of string ]) result option =
+  Some (Ok "Dinagat Islands")
+# let f_mem =
+  G.Feature.foreign_members islands_feature;;
+val f_mem : (string * G.json) list = [("title", `String "Some Islands")]
+]}
+
+
+{3 Using Accessors}
+
+The library has an experimental {{! https://www.tweag.io/blog/2022-05-05-existential-optics/} Optics}
+library: values in language that act as getters and setters. They are available in the {! Geojson.S.Accessor}
+module.
+
+We previously worked with an example of accessing the raw, multipoints stored in a geometry inside 
+a feature object. We can use the small combinator language to build an optical value to do just that.
+
+{@ocaml[
+# let multipoints =
+  let open G.Accessor in
+  geojson
+  & feature 
+  >$ Feature.geometry 
+  $> Optics.Prism.some
+  &> Geometry.geometry
+  $> Geometry.multipoint;;
+val multipoints :
+  (G.t, G.Geometry.MultiPoint.t option) G.Accessor.Optics.Lens.t =
+  G.Accessor.Optics.Lens.V (<fun>, <fun>)
+# G.Accessor.get multipoints islands 
+  |> Option.map G.Geometry.MultiPoint.coordinates;;
+- : Geojson_yojson.Geometry.Position.t array option =
+Some [|[|125.1; 40.|]; [|155.9; 22.5|]|]
+]}
+
+Once we have our lens, we can also set values with it.
+
+{@ocaml[
+# let mp = G.Geometry.(MultiPoint.v [| Position.v ~lng:1.0 ~lat:1.0 () |]);;
+val mp : G.Geometry.MultiPoint.t = <abstr>
+# let islands' = G.Accessor.set multipoints islands (Some mp);;
+val islands' : G.t = <abstr>
+# G.Accessor.get multipoints islands'
+  |> Option.map G.Geometry.MultiPoint.coordinates;;
+- : Geojson_yojson.Geometry.Position.t array option = Some [|[|1.; 1.|]|]
+]}
+
+As you can see, concisely impenetrable because of the infix operators. If anyone has any ideas how to make
+this better, please let me know. 

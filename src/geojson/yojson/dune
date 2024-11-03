@@ -1,0 +1,5 @@
+(library
+ (name geojson_yojson)
+ (public_name geojson.yojson)
+ (optional)
+ (libraries geojson yojson))

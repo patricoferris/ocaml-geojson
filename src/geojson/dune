@@ -2,5 +2,10 @@
  (public_name geojson)
  (name geojson))
 
+(mdx
+ (files index.mld)
+ (package geojson)
+ (libraries yojson geojson geojson.yojson))
+
 (documentation
  (package geojson))
