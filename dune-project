@@ -23,6 +23,7 @@
    (bos :with-test)
    (mdx :with-test)
    (alcotest :with-test)
+   (yojson :with-test)
    (ezjsonm :with-test)))
 
 (package
